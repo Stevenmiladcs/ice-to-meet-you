@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Vendor Live Panel</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d1117;
+      color: #f0f6fc;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .panel {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 20px;
+      padding: 36px 28px 28px;
+      max-width: 380px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .icon { font-size: 52px; margin-bottom: 10px; line-height: 1; }
+    h1 { font-size: 22px; font-weight: 700; color: #f0f6fc; }
+    .subtitle { font-size: 13px; color: #8b949e; margin-top: 4px; margin-bottom: 28px; }
+
+    .status-card {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 14px;
+      padding: 18px 16px;
+      margin-bottom: 22px;
+      text-align: left;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 7px 0;
+      border-bottom: 1px solid #21262d;
+    }
+    .row:last-child { border-bottom: none; }
+    .row-label {
+      font-size: 11px;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      font-weight: 500;
+    }
+    .row-value {
+      font-size: 13px;
+      color: #e6edf3;
+      font-family: 'Courier New', monospace;
+      font-weight: 600;
+    }
+
+    /* Live / Offline badges */
+    .badge-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #0f2a12;
+      border: 1px solid #3fb950;
+      color: #3fb950;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.4px;
+    }
+    .badge-offline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #1a1a1a;
+      border: 1px solid #484f58;
+      color: #8b949e;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .dot-green {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #3fb950;
+      animation: pulse-green 1.5s infinite;
+    }
+    .dot-gray {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #555;
+    }
+    @keyframes pulse-green {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.3; transform: scale(1.4); }
+    }
+
+    /* Accuracy bar */
+    .acc-wrap { margin-top: 14px; }
+    .acc-bar {
+      height: 5px;
+      background: #21262d;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .acc-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #3fb950, #7ce38b);
+      transition: width 0.6s ease;
+      width: 0%;
+    }
+    .acc-text {
+      font-size: 11px;
+      color: #8b949e;
+      margin-top: 5px;
+    }
+
+    /* Main button */
+    .btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.2px;
+      transition: transform 0.15s, filter 0.15s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-go {
+      background: linear-gradient(135deg, #238636 0%, #2ea043 100%);
+      color: #fff;
+    }
+    .btn-go:hover { filter: brightness(1.1); }
+    .btn-stop {
+      background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%);
+      color: #fff;
+    }
+    .btn-stop:hover { filter: brightness(1.1); }
+
+    .error-box {
+      background: #1e0a0a;
+      border: 1px solid #b91c1c;
+      color: #f85149;
+      font-size: 13px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      margin-top: 14px;
+      text-align: left;
+      display: none;
+      line-height: 1.4;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: #484f58;
+      margin-top: 18px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="panel">
+    <div class="icon">🚴</div>
+    <h1>Vendor Panel</h1>
+    <p class="subtitle">Broadcast your location to customers</p>
+
+    <div class="status-card">
+      <div class="row">
+        <span class="row-label">Status</span>
+        <span id="badge">
+          <span class="badge-offline"><span class="dot-gray"></span>Offline</span>
+        </span>
+      </div>
+      <div class="row">
+        <span class="row-label">Latitude</span>
+        <span class="row-value" id="lat">—</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Longitude</span>
+        <span class="row-value" id="lng">—</span>
+      </div>
+      <div class="row">
+        <span class="row-label">Last Update</span>
+        <span class="row-value" id="uptime">—</span>
+      </div>
+
+      <div class="acc-wrap">
+        <div class="acc-bar"><div class="acc-fill" id="acc-fill"></div></div>
+        <div class="acc-text" id="acc-text">GPS accuracy: waiting...</div>
+      </div>
+    </div>
+
+    <button class="btn btn-go" id="main-btn" onclick="toggleTracking()">🟢 Go Live</button>
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <p class="hint">Keep this page open while you are working ·<br>Customers will see you move in real time</p>
+
+  <script>
+    // ╔══════════════════════════════════════════════════════════╗
+    // ║  STEP 1 — Paste your Firebase config here               ║
+    // ║  (Get it from: Firebase Console → Project Settings)     ║
+    // ╚══════════════════════════════════════════════════════════╝
+    const firebaseConfig = {
+      apiKey:            "AIzaSyCrcdwzp0AK5dGP--wPPp6bII0kFo-E6hk",
+      authDomain:        "ice-to-meet-you.firebaseapp.com",
+      databaseURL:       "https://ice-to-meet-you-default-rtdb.firebaseio.com",
+      projectId:         "ice-to-meet-you",
+      storageBucket:     "ice-to-meet-you.firebasestorage.app",
+      messagingSenderId: "422154345501",
+      appId:             "1:422154345501:web:9c76d4695387a3bf1d3af4"
+    };
+    // ──────────────────────────────────────────────────────────
+
+    firebase.initializeApp(firebaseConfig);
+    const db  = firebase.database();
+    const ref = db.ref('vendor/location');
+
+    let watchId = null;
+    let isLive  = false;
+
+    function toggleTracking() {
+      if (!isLive) startTracking(); else stopTracking();
+    }
+
+    function startTracking() {
+      if (!navigator.geolocation) {
+        showError('GPS is not supported on this browser or device.');
+        return;
+      }
+      document.getElementById('error-box').style.display = 'none';
+      watchId = navigator.geolocation.watchPosition(onPosition, onGPSError, {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0
+      });
+      isLive = true;
+      ref.update({ online: true });
+      setBadge(true);
+      setBtn(false);
+    }
+
+    function stopTracking() {
+      if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+      isLive = false;
+      ref.update({ online: false });
+      setBadge(false);
+      setBtn(true);
+    }
+
+    function onPosition(pos) {
+      const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+
+      ref.set({ lat, lng, accuracy, timestamp: Date.now(), online: true });
+
+      document.getElementById('lat').textContent    = lat.toFixed(6);
+      document.getElementById('lng').textContent    = lng.toFixed(6);
+      document.getElementById('uptime').textContent = new Date().toLocaleTimeString();
+
+      // Accuracy bar: 5 m = 100%, 100 m = ~0%
+      const pct = Math.max(0, Math.min(100, (1 - (accuracy - 5) / 95) * 100));
+      document.getElementById('acc-fill').style.width = pct.toFixed(0) + '%';
+      document.getElementById('acc-text').textContent = `GPS accuracy: ±${Math.round(accuracy)} m`;
+    }
+
+    function onGPSError(err) {
+      showError('GPS error: ' + err.message + '\n\nMake sure location permission is granted.');
+    }
+
+    function setBadge(live) {
+      document.getElementById('badge').innerHTML = live
+        ? `<span class="badge-live"><span class="dot-green"></span>LIVE</span>`
+        : `<span class="badge-offline"><span class="dot-gray"></span>Offline</span>`;
+    }
+
+    function setBtn(goLive) {
+      const btn = document.getElementById('main-btn');
+      btn.textContent = goLive ? '🟢 Go Live' : '🔴 Stop Sharing';
+      btn.className   = goLive ? 'btn btn-go'  : 'btn btn-stop';
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-box');
+      el.textContent  = '⚠️ ' + msg;
+      el.style.display = 'block';
+    }
+
+    // Mark offline if the vendor closes the tab
+    window.addEventListener('beforeunload', () => {
+      if (isLive) ref.update({ online: false });
+    });
+  </script>
+</body>
+</html>
